@@ -1,0 +1,14 @@
+services:
+  tjan-donation:
+    container_name: tjan-donation
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - RECEIVE_CHANNEL=${RECEIVE_CHANNEL}
+      - CHANNEL=${CHANNEL}
+      - LATEST_TOP_DONATION_SAVE_PATH=${LATEST_TOP_DONATION_SAVE_PATH}
+    ports:
+      - "8080:80"
+    volumes:
+      - ./${LATEST_TOP_DONATION_SAVE_PATH}:/${LATEST_TOP_DONATION_SAVE_PATH}
