@@ -5,6 +5,7 @@ go 1.23.6
 require (
 	github.com/gempir/go-twitch-irc/v4 v4.2.0
 	github.com/gorilla/websocket v1.5.3
+	github.com/rs/cors v1.11.1
 	github.com/rs/zerolog v1.34.0
 )
 
