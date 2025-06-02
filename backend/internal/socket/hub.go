@@ -30,7 +30,11 @@ func (hub *Hub) Run() {
 		case client := <-hub.Register:
 			hub.clients[client] = true
 			donation := hub.donationService.GetLatestTopDonation()
-			client.Send <- fmt.Appendf(nil, "%s - %s€", donation.Name, formatFloat(donation.Amount))
+			if donation == nil {
+				client.Send <- []byte("- €")
+			} else {
+				client.Send <- fmt.Appendf(nil, "%s - %s€", donation.Name, formatFloat(donation.Amount))
+			}
 		case client := <-hub.unregister:
 			if _, ok := hub.clients[client]; ok {
 				delete(hub.clients, client)
@@ -38,7 +42,11 @@ func (hub *Hub) Run() {
 			}
 		case donation := <-hub.donationService.TopDonationChannel:
 			for client := range hub.clients {
-				client.Send <- fmt.Appendf(nil, "%s - %s€", donation.Name, formatFloat(donation.Amount))
+				if donation == nil {
+					client.Send <- []byte("- €")
+				} else {
+					client.Send <- fmt.Appendf(nil, "%s - %s€", donation.Name, formatFloat(donation.Amount))
+				}
 			}
 		}
 	}

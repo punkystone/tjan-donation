@@ -16,10 +16,11 @@ var donationPattern = regexp.MustCompile(`([^\s]+) spendet €([^\s]+) tjanL Dan
 type Donation struct {
 	Name   string  `json:"name"`
 	Amount float64 `json:"amount"`
+	Month  int     `json:"month"`
 }
 
 type Service struct {
-	TopDonationChannel        chan Donation
+	TopDonationChannel        chan *Donation
 	chat                      *twitch.Client
 	receiveChannel            string
 	latestTopDonation         *Donation
@@ -36,7 +37,7 @@ func NewDonationService(channel string, receiveChannel string, latestTopDonation
 	chat.Join(channel)
 
 	return &Service{
-		TopDonationChannel:        make(chan Donation),
+		TopDonationChannel:        make(chan *Donation),
 		chat:                      chat,
 		receiveChannel:            receiveChannel,
 		latestTopDonation:         nil,
@@ -47,12 +48,13 @@ func NewDonationService(channel string, receiveChannel string, latestTopDonation
 const reconnectInterval = 10 * time.Second
 
 func (donationService *Service) Start() {
+	go donationService.checkNewMonth()
 	donation, err := donationService.getLatestTopDonation()
 	if err != nil {
 		log.Error().Err(err)
 	} else {
 		donationService.latestTopDonation = donation
-		donationService.TopDonationChannel <- *donation
+		donationService.TopDonationChannel <- donation
 	}
 
 	donationService.chat.OnPrivateMessage(func(message twitch.PrivateMessage) {
@@ -66,9 +68,24 @@ func (donationService *Service) Start() {
 		time.Sleep(reconnectInterval)
 	}
 }
+func (donationService *Service) checkNewMonth() {
+	for {
+		currentMonth := int(time.Now().Month())
+		if donationService.latestTopDonation != nil {
+			if currentMonth != donationService.latestTopDonation.Month {
+				err := donationService.clearLatestTopDonation()
+				if err != nil {
+					log.Error().Err(err)
+				}
+			}
+		}
+		const delay = 10
+		time.Sleep(time.Second * delay)
+	}
+}
 
 func (donationService *Service) handleMessage(message twitch.PrivateMessage) {
-	if message.User.Name != "punkystone" {
+	if message.User.Name != donationService.receiveChannel {
 		return
 	}
 	matches := donationPattern.FindStringSubmatch(message.Message)
@@ -81,16 +98,27 @@ func (donationService *Service) handleMessage(message twitch.PrivateMessage) {
 		log.Error().Err(err).Msg("Failed to parse donation amount")
 		return
 	}
+	currentMonth := int(time.Now().Month())
 	if donationService.latestTopDonation != nil && donationAmount <= donationService.latestTopDonation.Amount {
 		return
 	}
-	donation := Donation{matches[1], donationAmount}
+	donation := Donation{matches[1], donationAmount, currentMonth}
 	donationService.latestTopDonation = &donation
-	donationService.TopDonationChannel <- donation
+	donationService.TopDonationChannel <- &donation
 	err = donationService.saveLatestTopDonation(donation)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to save top donation")
 	}
+}
+
+func (donationService *Service) clearLatestTopDonation() error {
+	donationService.latestTopDonation = nil
+	donationService.TopDonationChannel <- nil
+	err := os.Truncate(donationService.latestTopDonationSavePath, 0)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (donationService *Service) GetLatestTopDonation() *Donation {
