@@ -7,7 +7,6 @@ import (
 	"tjan-donation/internal/socket"
 
 	"github.com/gorilla/websocket"
-	"github.com/rs/cors"
 )
 
 const timeout = 5
@@ -23,6 +22,9 @@ func (handler *Handler) handle(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  ReadBufferSize,
 		WriteBufferSize: WriteBufferSize,
+		CheckOrigin: func(_ *http.Request) bool {
+			return true
+		},
 	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -41,10 +43,9 @@ func StartServer(hub *socket.Hub) error {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handler.handle)
-	corsHandler := cors.Default().Handler(mux)
 	server := &http.Server{
 		Addr:              ":80",
-		Handler:           corsHandler,
+		Handler:           mux,
 		ReadHeaderTimeout: timeout * time.Second,
 	}
 	return server.ListenAndServe()
